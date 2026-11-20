@@ -10,8 +10,7 @@ from sklearn.ensemble import RandomForestRegressor
 font_path = "simhei.ttf"
 try:
     my_font = fm.FontProperties(fname=font_path)
-except:
-    # 兜底，如果字体加载失败，至少负号正常
+except Exception:
     my_font = None
 plt.rcParams['axes.unicode_minus'] = False
 
@@ -20,7 +19,7 @@ st.set_page_config(page_title="水稻玉米种植决策辅助智能体", layout=
 st.title("水稻玉米种植决策辅助智能体")
 st.markdown("基于可解释AI，辅助小农户做产量、收益种植决策")
 
-# ====================== 模拟样本数据（你可以替换成自己真实数据集） ======================
+# ====================== 模拟样本数据 ======================
 np.random.seed(42)
 n = 200
 data = pd.DataFrame({
@@ -30,7 +29,6 @@ data = pd.DataFrame({
     "降水": np.random.uniform(50, 250, n),
     "土壤肥力": np.random.uniform(4, 9, n),
 })
-# 构造收益标签
 data["收益"] = (
     data["施肥量"] * 2.2
     + data["灌溉水量"] * 0.12
@@ -63,26 +61,32 @@ pred = model.predict(input_df)[0]
 st.subheader("📊 预测结果")
 st.metric("预估收益(元/亩)", f"{pred:.2f}")
 
-# ====================== SHAP 特征重要性图（重点，带中文字体） ======================
+# ====================== 【修复版本】SHAP因子重要性柱状图，不再用shap自带bar图 ======================
 st.subheader("图2：SHAP因子影响分析（可解释AI核心）")
-fig, ax = plt.subplots(figsize=(8,5))
-shap.summary_plot(shap_values, X, plot_type="bar", show=False)
+# 计算每个特征平均SHAP绝对值（重要性）
+shap_importance = np.abs(shap_values).mean(axis=0)
+feature_names = X.columns
 
-# 给标题、坐标轴设置字体
+fig, ax = plt.subplots(figsize=(8, 5))
+bars = ax.barh(feature_names, shap_importance)
+
 if my_font is not None:
     ax.set_title("SHAP因子影响分析（可解释AI核心）", fontproperties=my_font, fontsize=14)
     ax.set_xlabel("SHAP重要性分值", fontproperties=my_font)
-    ax.set_yticklabels(ax.get_yticklabels(), fontproperties=my_font)
-
+    ax.set_yticklabels(feature_names, fontproperties=my_font)
+ax.invert_yaxis()
 st.pyplot(fig)
 
-# ====================== SHAP瀑布图（单样本解释） ======================
+# ====================== SHAP瀑布图（单样本解释，这个相对稳定） ======================
 st.subheader("单样本因子贡献瀑布图")
-fig2, ax2 = plt.subplots(figsize=(9,5))
-shap.waterfall_plot(explainer(input_df)[0], show=False)
-if my_font is not None:
-    ax2.set_title("单条样本各因子对收益的贡献", fontproperties=my_font)
-st.pyplot(fig2)
+try:
+    fig2, ax2 = plt.subplots(figsize=(9,5))
+    shap.waterfall_plot(explainer(input_df)[0], show=False)
+    if my_font is not None:
+        ax2.set_title("单条样本各因子对收益的贡献", fontproperties=my_font)
+    st.pyplot(fig2)
+except Exception as e:
+    st.warning("瀑布图渲染受限，不影响预测与重要性分析")
 
 st.markdown("---")
 st.caption("第二届全国人工智能应用创新大赛｜小农户产量收益双目标可解释助农Agent")
